@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from fastapi.responses import FileResponse
 import requests
 import cv2
 import numpy as np
@@ -17,7 +18,7 @@ def health_check():
 
 @app.post("/extract-frames/")
 async def extract_frames(video_url: VideoURL):
-    # 1. دانلود ویدیو
+    # دانلود ویدیو
     video_response = requests.get(video_url.url, stream=True)
     if video_response.status_code != 200:
         return {"error": "Unable to download video"}
@@ -96,3 +97,10 @@ async def extract_frames(video_url: VideoURL):
             import shutil
             shutil.rmtree(output_dir)
         return {"error": str(e)}
+
+# 🔍 اندپوینت برای نمایش یا دانلود فایل تصویری با دادن مسیر کامل
+@app.get("/frame")
+def get_frame(path: str):
+    if os.path.exists(path):
+        return FileResponse(path)
+    return {"error": "File not found"}
