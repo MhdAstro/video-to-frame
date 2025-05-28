@@ -13,7 +13,7 @@ class VideoURL(BaseModel):
     url: str
 
 # ✅ توکن ثابت برای API بررسی محتوا
-CONTENT_API_TOKEN = "YOUR_STATIC_TOKEN_HERE"  # 🔁 توکن واقعی خودتو اینجا بذار
+CONTENT_API_TOKEN = "YwrdzYgYnMAGWyE18LVu1B4sbOz2qzpeo0g3dzKslFiCI0EMSdA0rxPue4YKDaYT"
 
 @app.get("/")
 def health_check():
