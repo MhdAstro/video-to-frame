@@ -39,19 +39,19 @@ async def analyze_video(video_url: VideoURL):
     payload = {"images": images}
     moderation_api_url = "https://revision.basalam.com/api_v1.0/validation/image/hijab-detector/bulk"
     headers = {
-        "api-token": "YwrdzYgYnMAGWyE18LVu1B4sbOz2qzpeo0g3dzKslFiCI0EMSdA0rxPue4YKDaYT",
+        "api-token": CONTENT_API_TOKEN,
         "Content-Type": "application/json"
     }
 
     try:
-        print(payload)
         response = requests.post(moderation_api_url, json=payload, headers=headers)
-        moderation_result = response.json()
+        moderation_result = response.json()  # حالا یک لیست ساده از آبجکت‌هاست
 
+        # استخراج URLهایی که فایل ممنوعه هستن با استفاده از file_id
         forbidden_images = [
-            image["url"]
-            for image in moderation_result.get("images", [])
-            if image.get("is_forbidden") == True
+            images[result["file_id"]]["url"]
+            for result in moderation_result
+            if result.get("is_forbidden") is True
         ]
 
         return {
@@ -60,7 +60,9 @@ async def analyze_video(video_url: VideoURL):
         }
 
     except Exception as e:
-        return {"error": f"Failed to call moderation API: {str(e)}"}
+        return {
+            "error": f"Failed to call moderation API: {str(e)}"
+        }
 
 def extract_frames_internal(video_url):
     video_response = requests.get(video_url, stream=True)
