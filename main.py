@@ -12,8 +12,8 @@ app = FastAPI()
 class VideoURL(BaseModel):
     url: str
 
-# ✅ توکن ثابت برای بررسی محتوا
-CONTENT_API_TOKEN = "YOUR_STATIC_TOKEN_HERE"  # ← اینجا توکن رو بذار
+# ✅ توکن ثابت برای API بررسی محتوا
+CONTENT_API_TOKEN = "YOUR_STATIC_TOKEN_HERE"  # 🔁 توکن واقعی خودتو اینجا بذار
 
 @app.get("/")
 def health_check():
@@ -45,14 +45,29 @@ async def analyze_video(video_url: VideoURL):
 
     try:
         response = requests.post(moderation_api_url, json=payload, headers=headers)
-        moderation_result = response.json()  # حالا یک لیست ساده از آبجکت‌هاست
 
-        # استخراج URLهایی که فایل ممنوعه هستن با استفاده از file_id
-        forbidden_images = [
-            images[result["file_id"]]["url"]
-            for result in moderation_result
-            if result.get("is_forbidden") is True
-        ]
+        # تلاش برای گرفتن پاسخ JSON معتبر
+        try:
+            moderation_result = response.json()
+            if not isinstance(moderation_result, list):
+                raise ValueError("API response is not a list")
+        except Exception:
+            return {
+                "error": "Invalid response from moderation API",
+                "status_code": response.status_code,
+                "raw_response": response.text
+            }
+
+        # استخراج url فریم‌هایی که is_forbidden=true هستن
+        forbidden_images = []
+        for result in moderation_result:
+            try:
+                if result.get("is_forbidden") is True:
+                    file_id = result.get("file_id")
+                    if file_id is not None and 0 <= file_id < len(images):
+                        forbidden_images.append(images[file_id]["url"])
+            except Exception:
+                continue  # هر مورد خراب رو رد می‌کنیم
 
         return {
             "is_forbidden": len(forbidden_images) > 0,
