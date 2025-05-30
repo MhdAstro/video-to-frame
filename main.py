@@ -98,12 +98,14 @@ def extract_frames_internal(video_url):
             return {"error": "Cannot open video"}
 
         fps = cap.get(cv2.CAP_PROP_FPS)
-        scene_threshold = 20
-        SKIP_FRAMES = 3
+        scene_threshold = 30.0
+        SKIP_FRAMES = 5
         prev_gray = None
         frame_index = 0
         last_saved_index = -15
         output_frames_info = []
+
+        url_prefix = "https://video-check.darkube.app/frame?path="  # 🔁 لینک نهایی دسترسی
 
         while True:
             ret, frame = cap.read()
@@ -121,7 +123,7 @@ def extract_frames_internal(video_url):
             if prev_gray is not None:
                 diff = cv2.absdiff(gray, prev_gray)
                 scene_diff = np.mean(diff)
-                if scene_diff > scene_threshold :
+                if scene_diff > scene_threshold and (frame_index - last_saved_index >= 10):
                     save_frame = True
 
             if save_frame:
@@ -129,11 +131,14 @@ def extract_frames_internal(video_url):
                 frame_filepath = os.path.join(output_dir, frame_filename)
                 cv2.imwrite(frame_filepath, frame)
 
+                image_url = url_prefix + frame_filepath  # ⬅️ لینک نهایی رو می‌سازیم
+
                 output_frames_info.append({
+                    "file_id": len(output_frames_info),
                     "frame": frame_index,
                     "timestamp": round(frame_index / fps, 2),
                     "scene_diff": round(scene_diff, 2),
-                    "image_path": frame_filepath
+                    "url": image_url  # فقط URL می‌دیم
                 })
                 last_saved_index = frame_index
 
@@ -154,7 +159,6 @@ def extract_frames_internal(video_url):
             import shutil
             shutil.rmtree(output_dir)
         return {"error": str(e)}
-
 @app.get("/frame")
 def get_frame(path: str):
     if os.path.exists(path):
