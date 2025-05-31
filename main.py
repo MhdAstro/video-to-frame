@@ -29,46 +29,24 @@ async def analyze_video(video_url: VideoURL):
     if "error" in result:
         return result
 
-    local_images = []
+    # Prepare the images data directly from the frame URLs
+    uploaded_images = []
     for idx, frame in enumerate(result["frames"]):
-        local_images.append({
+        uploaded_images.append({
             "file_id": idx,
-            "local_path": frame["image_path"]
+            "url": frame["url"]
         })
 
-    # ✅ مرحله 1: آپلود هر تصویر به باسلام
-    uploaded_images = []
-    for image in local_images:
-        try:
-            with open(image["local_path"], "rb") as f:
-                files = {"file": f}
-                headers = {
-                    "Authorization": UPLOAD_API_TOKEN
-                }
-                upload_response = requests.post(
-                    "https://uploadio.basalam.com/v3/files",
-                    headers=headers,
-                    files=files
-                )
-                upload_response.raise_for_status()
-                upload_result = upload_response.json()
-                uploaded_images.append({
-                    "file_id": image["file_id"],
-                    "url": upload_result["url"]
-                })
-        except Exception as e:
-            return {
-                "error": f"Failed to upload image {image['local_path']}",
-                "details": str(e)
-            }
-
-    # ✅ مرحله 2: ارسال به revision برای بررسی محتوای نامناسب
+    # Send to revision for content moderation
     payload = {"images": uploaded_images}
     moderation_api_url = "https://revision.basalam.com/api_v1.0/validation/image/hijab-detector/bulk"
     headers = {
         "api-token": REVISION_API_TOKEN,
         "Content-Type": "application/json"
     }
+
+    # Debug print
+    print("Revision API Request Payload:", payload)
 
     try:
         response = requests.post(moderation_api_url, json=payload, headers=headers)
