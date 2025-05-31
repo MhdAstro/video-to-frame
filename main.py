@@ -40,7 +40,7 @@ async def analyze_video(video_url: VideoURL):
     moderation_api_url = "https://revision.basalam.com/api_v1.0/validation/image/hijab-detector/bulk"
     headers = {
         "api-token": CONTENT_API_TOKEN,
-        "Content-Type": "application/json"
+       # "Content-Type": "application/json"
     }
 
     try:
@@ -98,8 +98,8 @@ def extract_frames_internal(video_url):
             return {"error": "Cannot open video"}
 
         fps = cap.get(cv2.CAP_PROP_FPS)
-        scene_threshold = 30.0
-        SKIP_FRAMES = 5
+        scene_threshold = 20.0
+        SKIP_FRAMES = 3
         prev_gray = None
         frame_index = 0
         last_saved_index = -15
@@ -123,7 +123,7 @@ def extract_frames_internal(video_url):
             if prev_gray is not None:
                 diff = cv2.absdiff(gray, prev_gray)
                 scene_diff = np.mean(diff)
-                if scene_diff > scene_threshold and (frame_index - last_saved_index >= 10):
+                if scene_diff > scene_threshold :
                     save_frame = True
 
             if save_frame:
