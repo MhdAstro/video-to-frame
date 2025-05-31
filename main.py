@@ -13,8 +13,8 @@ class VideoURL(BaseModel):
     url: str
 
 # ✅ توکن ثابت برای API بررسی محتوا
-CONTENT_API_TOKEN = "YwrdzYgYnMAGWyE18LVu1B4sbOz2qzpeo0g3dzKslFiCI0EMSdA0rxPue4YKDaYT"
-
+REVISION_API_TOKEN = "YwrdzYgYnMAGWyE18LVu1B4sbOz2qzpeo0g3dzKslFiCI0EMSdA0rxPue4YKDaYT"
+UPLOAD_API_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI1NTAiLCJqdGkiOiJjN2FiYTE2NTBkNzA3ZTg4Mjc5YzI4MTY4ZTczYzc4NzJkMzY1NWIwMGFjYjRkZGJhMDA1ZWE2MTU0ODhjZjFjZjExZjJjZWU1MmNhNzcxNyIsImlhdCI6MTc0NzY0MTkxNC42ODg0MjIsIm5iZiI6MTc0NzY0MTkxNC42ODg0MjYsImV4cCI6MTc3OTE3NzkxNC42NzIxNzQsInN1YiI6IjE2NTExNjc5Iiwic2NvcGVzIjpbIm9yZGVyLXByb2Nlc3NpbmciLCJ2ZW5kb3IucHJvZmlsZS5yZWFkIiwidmVuZG9yLnByb2ZpbGUud3JpdGUiLCJjdXN0b21lci5wcm9maWxlLndyaXRlIiwiY3VzdG9tZXIucHJvZmlsZS5yZWFkIiwidmVuZG9yLnByb2R1Y3Qud3JpdGUiLCJ2ZW5kb3IucHJvZHVjdC5yZWFkIiwiY3VzdG9tZXIub3JkZXIucmVhZCIsImN1c3RvbWVyLm9yZGVyLndyaXRlIiwidmVuZG9yLnBhcmNlbC5yZWFkIiwidmVuZG9yLnBhcmNlbC53cml0ZSIsImN1c3RvbWVyLndhbGxldC5yZWFkIiwiY3VzdG9tZXIud2FsbGV0LndyaXRlIiwiY3VzdG9tZXIuY2hhdC5yZWFkIiwiY3VzdG9tZXIuY2hhdC53cml0ZSJdLCJ1c2VyX2lkIjoxNjUxMTY3OX0.EbrqOaUaGI6wORC446IDclq4gg8j2mWhuVzHA82tph2PZ6Fnx2sPMMqCuhOSavSXX6Vuk6Pmfh_qMIl_zcAPXvBvgmi62or1BRPCqOZ9E-L0DUWdDIiY8tpU6Rxl5QkISCjS-K5dpgpj6aBwQYadYQKUxUN0JJ_usgNSeSXYfAUJvVxOO3ZhpSjZ9O4jEu2vPZSiS5gkOIw-Q8Erz9GHB21m_3h2r2XJvJEwJ6GfPuYVubfMlNFMfufpqHQUpRyov0OAS_wCMGJmA5jBYHxlt3GEAb-hU0eWP6Tg44y5XO65gaIF1vyLKu5tHZ1j-d6Oue3wolxb3NgTwZHTVsxR6pUrA6j90vunHLVSlE4uVD0QYB3R2PUKOA5tM6LWgu72d3ynnSRrBBXEpBMy-SFk0iESyOLKD2qCXcetRfRlDPBoKVjotavp2W0hU9GDthVzopsKQaD8YrQW1zSWXPKRxgflod455bRZdeJo2dvJMhZAX8C7wTcGyJddcLO4Eq-bT7w7yJnBeSUEZtycqHVCD6mIZ_gq4jlVtYir4tnU5IKHpeMITkCaA1H9QcOr1VdGVngfrjqRSduATGA-IxW9VKeiHNYowZ6JQrbbXi0GDCKluPbGxji5WYV-kvRt3afzEiYx1vuDns58Xu8hkac8rdVrXbbpkIZyv46V6R1z4-o"
 @app.get("/")
 def health_check():
     return {"status": "ok"}
@@ -29,24 +29,50 @@ async def analyze_video(video_url: VideoURL):
     if "error" in result:
         return result
 
-    images = []
-    url_prefix = "https://video-check.darkube.app/frame?path="
-
+    local_images = []
     for idx, frame in enumerate(result["frames"]):
-        image_url = url_prefix + frame["image_path"]
-        images.append({"file_id": idx, "url": image_url})
+        local_images.append({
+            "file_id": idx,
+            "local_path": frame["image_path"]
+        })
 
-    payload = {"images": images}
+    # ✅ مرحله 1: آپلود هر تصویر به باسلام
+    uploaded_images = []
+    for image in local_images:
+        try:
+            with open(image["local_path"], "rb") as f:
+                files = {"file": f}
+                headers = {
+                    "Authorization": UPLOAD_API_TOKEN
+                }
+                upload_response = requests.post(
+                    "https://uploadio.basalam.com/v3/files",
+                    headers=headers,
+                    files=files
+                )
+                upload_response.raise_for_status()
+                upload_result = upload_response.json()
+                uploaded_images.append({
+                    "file_id": image["file_id"],
+                    "url": upload_result["url"]
+                })
+        except Exception as e:
+            return {
+                "error": f"Failed to upload image {image['local_path']}",
+                "details": str(e)
+            }
+
+    # ✅ مرحله 2: ارسال به revision برای بررسی محتوای نامناسب
+    payload = {"images": uploaded_images}
     moderation_api_url = "https://revision.basalam.com/api_v1.0/validation/image/hijab-detector/bulk"
     headers = {
-        "api-token": CONTENT_API_TOKEN,
-       # "Content-Type": "application/json"
+        "api-token": REVISION_API_TOKEN,
+        "Content-Type": "application/json"
     }
 
     try:
         response = requests.post(moderation_api_url, json=payload, headers=headers)
 
-        # تلاش برای گرفتن پاسخ JSON معتبر
         try:
             moderation_result = response.json()
             if not isinstance(moderation_result, list):
@@ -58,16 +84,15 @@ async def analyze_video(video_url: VideoURL):
                 "raw_response": response.text
             }
 
-        # استخراج url فریم‌هایی که is_forbidden=true هستن
         forbidden_images = []
         for result in moderation_result:
             try:
                 if result.get("is_forbidden") is True:
                     file_id = result.get("file_id")
-                    if file_id is not None and 0 <= file_id < len(images):
-                        forbidden_images.append(images[file_id]["url"])
+                    if file_id is not None and 0 <= file_id < len(uploaded_images):
+                        forbidden_images.append(uploaded_images[file_id]["url"])
             except Exception:
-                continue  # هر مورد خراب رو رد می‌کنیم
+                continue
 
         return {
             "is_forbidden": len(forbidden_images) > 0,
