@@ -152,7 +152,7 @@ def extract_frames_internal(video_url):
                     save_frame = True
 
             if save_frame:
-                frame_filename = f"frame_{frame_index:06d}.jpg"
+                frame_filename = f"frame_{frame_index:06d}.jpeg"
                 frame_filepath = os.path.join(output_dir, frame_filename)
                 cv2.imwrite(frame_filepath, frame)
 
@@ -163,7 +163,8 @@ def extract_frames_internal(video_url):
                     "frame": frame_index,
                     "timestamp": round(frame_index / fps, 2),
                     "scene_diff": round(scene_diff, 2),
-                    "url": image_url  # فقط URL می‌دیم
+                    "url": image_url,
+                    "image_path": frame_filepath  # Add the local file path
                 })
                 last_saved_index = frame_index
 
