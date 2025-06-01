@@ -65,11 +65,18 @@ async def analyze_video(video_url: VideoURL):
         forbidden_images = []
         is_video_forbidden = False
         
+        # Add URLs to moderation results
+        frames_with_urls = []
         for result in moderation_result:
             try:
-                if result.get("is_forbidden") is True:
-                    file_id = result.get("file_id")
-                    if file_id is not None and 0 <= file_id < len(uploaded_images):
+                file_id = result.get("file_id")
+                if file_id is not None and 0 <= file_id < len(uploaded_images):
+                    # Add URL to the result
+                    result_with_url = result.copy()
+                    result_with_url["frame_url"] = uploaded_images[file_id]["url"]
+                    frames_with_urls.append(result_with_url)
+                    
+                    if result.get("is_forbidden") is True:
                         forbidden_images.append(uploaded_images[file_id]["url"])
                         is_video_forbidden = True
             except Exception:
@@ -82,7 +89,7 @@ async def analyze_video(video_url: VideoURL):
                 "total_forbidden_images": len(forbidden_images),
                 "total_processed_images": len(moderation_result)
             },
-            "frames_results": moderation_result  # Raw response from revision API for each frame
+            "frames_results": frames_with_urls  # Now includes URLs with each frame result
         }
 
     except Exception as e:
@@ -109,7 +116,7 @@ def extract_frames_internal(video_url):
             return {"error": "Cannot open video"}
 
         fps = cap.get(cv2.CAP_PROP_FPS)
-        scene_threshold = 20.0
+        scene_threshold = 15.0
         SKIP_FRAMES = 3
         prev_gray = None
         frame_index = 0
