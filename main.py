@@ -63,7 +63,7 @@ async def analyze_video(video_url: VideoURL):
             }
 
         forbidden_images = []
-        is_video_forbidden = False  # Track if any image is forbidden
+        is_video_forbidden = False
         
         for result in moderation_result:
             try:
@@ -71,15 +71,18 @@ async def analyze_video(video_url: VideoURL):
                     file_id = result.get("file_id")
                     if file_id is not None and 0 <= file_id < len(uploaded_images):
                         forbidden_images.append(uploaded_images[file_id]["url"])
-                        is_video_forbidden = True  # Set to True if any image is forbidden
+                        is_video_forbidden = True
             except Exception:
                 continue
 
         return {
-            "is_forbidden": is_video_forbidden,  # Use our tracked value
-            "forbidden_images": forbidden_images,
-            "total_forbidden_images": len(forbidden_images),
-            "total_processed_images": len(moderation_result)
+            "final_result": {
+                "is_forbidden": is_video_forbidden,
+                "forbidden_images": forbidden_images,
+                "total_forbidden_images": len(forbidden_images),
+                "total_processed_images": len(moderation_result)
+            },
+            "frames_results": moderation_result  # Raw response from revision API for each frame
         }
 
     except Exception as e:
