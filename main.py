@@ -134,7 +134,7 @@ def extract_frames_internal(video_url):
             return {"error": "Cannot open video"}
 
         fps = cap.get(cv2.CAP_PROP_FPS)
-        scene_threshold = 15.0
+        scene_threshold = 20.0
         SKIP_FRAMES = 3
         prev_gray = None
         frame_index = 0
@@ -201,3 +201,64 @@ def get_frame(path: str):
     if os.path.exists(path):
         return FileResponse(path)
     return {"error": "File not found"}
+@app.post("/check-video/")
+async def check_video(video_url: VideoURL):
+    # استخراج فریم‌ها
+    result = extract_frames_internal(video_url.url)
+    if "error" in result:
+        return result
+
+    frame_urls = []
+    revision_input = []
+
+    for idx, frame in enumerate(result["frames"]):
+        url = frame["url"]
+        if not url.startswith("http"):
+            url = f"https://video-check.darkube.app/frame?path={frame['image_path']}"
+
+        frame_urls.append(url)
+        revision_input.append({
+            "file_id": idx,
+            "url": url
+        })
+
+    # ارسال فریم‌ها به API بررسی
+    revision_api_url = "https://revision.basalam.com/api_v1.0/validation/image/hijab-detector/bulk"
+    headers = {
+        "api-token": REVISION_API_TOKEN ,  # ⬅️ توکن را اینجا بذار
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(
+            revision_api_url,
+            json=[{"images": revision_input}],
+            headers=headers
+        )
+        if response.status_code != 200:
+            return {
+                "error": "Revision API call failed",
+                "status_code": response.status_code,
+                "response": response.text
+            }
+
+        revision_results = response.json()
+
+        # آیا حتی یک فریم هم ممنوع بوده؟
+        is_video_forbidden = any(f.get("is_forbidden", False) for f in revision_results)
+
+        # اضافه کردن آدرس فریم‌ها به خروجی نهایی
+        for item in revision_results:
+            fid = item.get("file_id")
+            if fid is not None and fid < len(frame_urls):
+                item["frame_url"] = frame_urls[fid]
+
+        return {
+            "is_video_forbidden": is_video_forbidden,
+            "frame_count": len(frame_urls),
+            "frame_urls": frame_urls,
+            "revision_results": revision_results
+        }
+
+    except Exception as e:
+        return {"error": f"Failed to call revision API: {str(e)}"}
