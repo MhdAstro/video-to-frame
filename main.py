@@ -32,9 +32,14 @@ async def analyze_video(video_url: VideoURL):
     # Prepare the images data directly from the frame URLs
     uploaded_images = []
     for idx, frame in enumerate(result["frames"]):
+        # Ensure the URL is properly formatted
+        frame_url = frame["url"]
+        if not frame_url.startswith('http'):
+            frame_url = f"https://video-check.darkube.app/frame?path={frame['image_path']}"
+        
         uploaded_images.append({
             "file_id": idx,
-            "url": frame["url"]
+            "url": frame_url
         })
 
     # Send to revision for content moderation
@@ -45,11 +50,14 @@ async def analyze_video(video_url: VideoURL):
         "Content-Type": "application/json"
     }
 
-    # Debug print
-    print("Revision API Request Payload:", payload)
+    # Debug print with full URLs
+    print("Revision API Request Payload URLs:")
+    for img in uploaded_images:
+        print(f"file_id: {img['file_id']}, URL: {img['url']}")
 
     try:
         response = requests.post(moderation_api_url, json=payload, headers=headers)
+        print("Revision API Response:", response.text)  # Debug print raw response
 
         try:
             moderation_result = response.json()
@@ -65,8 +73,9 @@ async def analyze_video(video_url: VideoURL):
         forbidden_images = []
         is_video_forbidden = False
         
-        # Add URLs to moderation results
+        # Add URLs to moderation results and debug prints
         frames_with_urls = []
+        print("\nProcessing each frame result:")
         for result in moderation_result:
             try:
                 file_id = result.get("file_id")
@@ -76,10 +85,15 @@ async def analyze_video(video_url: VideoURL):
                     result_with_url["frame_url"] = uploaded_images[file_id]["url"]
                     frames_with_urls.append(result_with_url)
                     
+                    print(f"Frame {file_id}:")
+                    print(f"  URL: {uploaded_images[file_id]['url']}")
+                    print(f"  Is Forbidden: {result.get('is_forbidden')}")
+                    
                     if result.get("is_forbidden") is True:
                         forbidden_images.append(uploaded_images[file_id]["url"])
                         is_video_forbidden = True
-            except Exception:
+            except Exception as e:
+                print(f"Error processing frame {file_id}: {str(e)}")
                 continue
 
         return {
@@ -89,7 +103,11 @@ async def analyze_video(video_url: VideoURL):
                 "total_forbidden_images": len(forbidden_images),
                 "total_processed_images": len(moderation_result)
             },
-            "frames_results": frames_with_urls  # Now includes URLs with each frame result
+            "frames_results": frames_with_urls,
+            "debug_info": {
+                "original_urls": [img["url"] for img in uploaded_images],
+                "raw_revision_response": moderation_result
+            }
         }
 
     except Exception as e:
