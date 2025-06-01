@@ -232,7 +232,7 @@ async def check_video(video_url: VideoURL):
     try:
         response = requests.post(
             revision_api_url,
-            json=[{"images": revision_input}],
+            json={"images": revision_input},
             headers=headers
         )
         if response.status_code != 200:
