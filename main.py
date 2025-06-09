@@ -10,18 +10,32 @@ import shutil
 
 app = FastAPI()
 
+# --- بخش ۱: خواندن متغیرهای محیطی ---
+# مقادیر ضروری که باید حتما در محیط تنظیم شوند (بدون مقدار پیش‌فرض)
+REVISION_API_TOKEN = os.getenv("REVISION_API_TOKEN")
+UPLOAD_API_TOKEN = os.getenv("UPLOAD_API_TOKEN") # این توکن در کد شما استفاده نشده بود اما خوانده می‌شود
+APP_BASE_URL = os.getenv("APP_BASE_URL")
+MODERATION_API_URL = os.getenv("MODERATION_API_URL")
+
+# بررسی وجود متغیرهای ضروری
+if not REVISION_API_TOKEN or not APP_BASE_URL or not MODERATION_API_URL:
+    raise ValueError("Missing one or more required environment variables: REVISION_API_TOKEN, APP_BASE_URL, MODERATION_API_URL")
+
+# پارامترهای پیکربندی (با مقادیر پیش‌فرض امن)
+MAX_FRAMES = int(os.getenv("MAX_FRAMES", "30"))
+SKIP_FRAMES = int(os.getenv("SKIP_FRAMES", "3"))
+SCENE_THRESHOLD = float(os.getenv("SCENE_THRESHOLD", "20.0"))
+FRAME_RESIZE = (int(os.getenv("FRAME_RESIZE_WIDTH", "224")), int(os.getenv("FRAME_RESIZE_HEIGHT", "224")))
+
+
 class VideoURL(BaseModel):
     url: str
-
-# ✅ توکن ثابت برای API بررسی محتوا
-REVISION_API_TOKEN = "YwrdzYgYnMAGWyE18LVu1B4sbOz2qzpeo0g3dzKslFiCI0EMSdA0rxPue4YKDaYT"
-UPLOAD_API_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI1NTAiLCJqdGkiOiJjN2FiYTE2NTBkNzA3ZTg4Mjc5YzI4MTY4ZTczYzc4NzJkMzY1NWIwMGFjYjRkZGJhMDA1ZWE2MTU0ODhjZjFjZjExZjJjZWU1MmNhNzcxNyIsImlhdCI6MTc0NzY0MTkxNC42ODg0MjIsIm5iZiI6MTc0NzY0MTkxNC42ODg0MjYsImV4cCI6MTc3OTE3NzkxNC42NzIxNzQsInN1YiI6IjE2NTExNjc5Iiwic2NvcGVzIjpbIm9yZGVyLXByb2Nlc3NpbmciLCJ2ZW5kb3IucHJvZmlsZS5yZWFkIiwidmVuZG9yLnByb2ZpbGUud3JpdGUiLCJjdXN0b21lci5wcm9maWxlLndyaXRlIiwiY3VzdG9tZXIucHJvZmlsZS5yZWFkIiwidmVuZG9yLnByb2R1Y3Qud3JpdGUiLCJ2ZW5kb3IucHJvZHVjdC5yZWFkIiwiY3VzdG9tZXIub3JkZXIucmVhZCIsImN1c3RvbWVyLm9yZGVyLndyaXRlIiwidmVuZG9yLnBhcmNlbC5yZWFkIiwidmVuZG9yLnBhcmNlbC53cml0ZSIsImN1c3RvbWVyLndhbGxldC5yZWFkIiwiY3VzdG9tZXIud2FsbGV0LndyaXRlIiwiY3VzdG9tZXIuY2hhdC5yZWFkIiwiY3VzdG9tZXIuY2hhdC53cml0ZSJdLCJ1c2VyX2lkIjoxNjUxMTY3OX0.EbrqOaUaGI6wORC446IDclq4gg8j2mWhuVzHA82tph2PZ6Fnx2sPMMqCuhOSavSXX6Vuk6Pmfh_qMIl_zcAPXvBvgmi62or1BRPCqOZ9E-L0DUWdDIiY8tpU6Rxl5QkISCjS-K5dpgpj6aBwQYadYQKUxUN0JJ_usgNSeSXYfAUJvVxOO3ZhpSjZ9O4jEu2vPZSiS5gkOIw-Q8Erz9GHB21m_3h2r2XJvJEwJ6GfPuYVubfMlNFMfufpqHQUpRyov0OAS_wCMGJmA5jBYHxlt3GEAb-hU0eWP6Tg44y5XO65gaIF1vyLKu5tHZ1j-d6Oue3wolxb3NgTwZHTVsxR6pUrA6j90vunHLVSlE4uVD0QYB3R2PUKOA5tM6LWgu72d3ynnSRrBBXEpBMy-SFk0iESyOLKD2qCXcetRfRlDPBoKVjotavp2W0hU9GDthVzopsKQaD8YrW1zSWXPKRxgflod455bRZdeJo2dvJMhZAX8C7wTcGyJddcLO4Eq-bT7w7yJnBeSUEZtycqHVCD6mIZ_gq4jlVtYir4tnU5IKHpeMITkCaA1H9QcOr1VdGVngfrjqRSduATGA-IxW9VKeiHNYowZ6JQrbbXi0GDCKluPbGxji5WYV-kvRt3afzEiYx1vuDns58Xu8hkac8rdVrXbbpkIZyv46V6R1z4-o"
 
 @app.get("/")
 def health_check():
     return {"status": "ok"}
 
-# تابع extract_frames_internal جدید که منطق انتخاب فریم‌ها را تغییر می‌دهد
+# بقیه کد بدون هیچ تغییری باقی می‌ماند
 def extract_frames_internal(video_url):
     video_response = requests.get(video_url, stream=True)
     if video_response.status_code != 200:
@@ -41,14 +55,10 @@ def extract_frames_internal(video_url):
             return {"error": "Cannot open video"}
 
         fps = cap.get(cv2.CAP_PROP_FPS)
-        MAX_FRAMES = 30
-        SKIP_FRAMES = 3
-        SCENE_THRESHOLD = 20.0
-        FRAME_RESIZE = (224, 224)
 
         prev_gray = None
         frame_index = 0
-        changes = [] # لیست برای ذخیره فریم‌هایی با تغییرات صحنه
+        changes = []
 
         while True:
             ret, frame = cap.read()
@@ -59,7 +69,7 @@ def extract_frames_internal(video_url):
                 frame_index += 1
                 continue
 
-            resized = cv2.resize(frame, FRAME_RESIZE) # تغییر اندازه فریم برای تحلیل سریعتر
+            resized = cv2.resize(frame, FRAME_RESIZE)
             gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
             scene_diff = 0.0
 
@@ -67,7 +77,7 @@ def extract_frames_internal(video_url):
                 diff = cv2.absdiff(gray, prev_gray)
                 scene_diff = np.mean(diff)
                 if scene_diff > SCENE_THRESHOLD:
-                    changes.append((frame_index, scene_diff, frame.copy())) # ذخیره فریم اصلی
+                    changes.append((frame_index, scene_diff, frame.copy()))
 
             prev_gray = gray
             frame_index += 1
@@ -75,16 +85,15 @@ def extract_frames_internal(video_url):
         cap.release()
         os.unlink(video_path)
 
-        # انتخاب ۳۰ فریم با بیشترین تغییر
-        # اگر تعداد فریم‌های با تغییر کمتر از 30 باشد، همه آن‌ها انتخاب می‌شوند.
         top_changes = sorted(changes, key=lambda x: -x[1])[:MAX_FRAMES]
         output_frames_info = []
-        url_prefix = "https://video-analysis.darkube.app/frame?path="
+        
+        url_prefix = f"{APP_BASE_URL}/frame?path="
 
         for i, (frame_idx, score, frame_original) in enumerate(top_changes):
             frame_filename = f"frame_{frame_idx:06d}.jpeg"
             frame_filepath = os.path.join(output_dir, frame_filename)
-            cv2.imwrite(frame_filepath, frame_original) # ذخیره فریم اصلی با اندازه کامل
+            cv2.imwrite(frame_filepath, frame_original)
             image_url = url_prefix + frame_filepath
 
             output_frames_info.append({
@@ -104,51 +113,43 @@ def extract_frames_internal(video_url):
 
     except Exception as e:
         if os.path.exists(output_dir):
-            import shutil
             shutil.rmtree(output_dir)
         return {"error": str(e)}
 
 @app.post("/extract-frames/")
 async def extract_frames(video_url: VideoURL):
-    # این اندپوینت از تابع extract_frames_internal جدید استفاده می‌کند
     return extract_frames_internal(video_url.url)
 
 @app.post("/analyze-video/")
 async def analyze_video(video_url: VideoURL):
-    # این اندپوینت از تابع extract_frames_internal جدید استفاده می‌کند
     result = extract_frames_internal(video_url.url)
     if "error" in result:
         return result
 
-    # Prepare the images data directly from the frame URLs
     uploaded_images = []
     for idx, frame in enumerate(result["frames"]):
-        # Ensure the URL is properly formatted
         frame_url = frame["url"]
         if not frame_url.startswith('http'):
-            frame_url = f"https://video-analysis.darkube.app/frame?path={frame['image_path']}"
+            frame_url = f"{APP_BASE_URL}/frame?path={frame['image_path']}"
 
         uploaded_images.append({
             "file_id": idx,
             "url": frame_url
         })
 
-    # Send to revision for content moderation
     payload = {"images": uploaded_images}
-    moderation_api_url = "https://revision.basalam.com/api_v1.0/validation/image/hijab-detector/bulk"
     headers = {
         "api-token": REVISION_API_TOKEN,
         "Content-Type": "application/json"
     }
 
-    # Debug print with full URLs
     print("Revision API Request Payload URLs:")
     for img in uploaded_images:
         print(f"file_id: {img['file_id']}, URL: {img['url']}")
 
     try:
-        response = requests.post(moderation_api_url, json=payload, headers=headers)
-        print("Revision API Response:", response.text)  # Debug print raw response
+        response = requests.post(MODERATION_API_URL, json=payload, headers=headers)
+        print("Revision API Response:", response.text)
 
         try:
             moderation_result = response.json()
@@ -163,15 +164,13 @@ async def analyze_video(video_url: VideoURL):
 
         forbidden_images = []
         is_video_forbidden = False
-
-        # Add URLs to moderation results and debug prints
         frames_with_urls = []
+        
         print("\nProcessing each frame result:")
         for result in moderation_result:
             try:
                 file_id = result.get("file_id")
                 if file_id is not None and 0 <= file_id < len(uploaded_images):
-                    # Add URL to the result
                     result_with_url = result.copy()
                     result_with_url["frame_url"] = uploaded_images[file_id]["url"]
                     frames_with_urls.append(result_with_url)
@@ -214,8 +213,6 @@ def get_frame(path: str):
 
 @app.post("/check-video/")
 async def check_video(video_url: VideoURL):
-    # این اندپوینت از تابع extract_frames_internal جدید استفاده می‌کند
-    # استخراج فریم‌ها
     result = extract_frames_internal(video_url.url)
     if "error" in result:
         return result
@@ -226,7 +223,7 @@ async def check_video(video_url: VideoURL):
     for idx, frame in enumerate(result["frames"]):
         url = frame["url"]
         if not url.startswith("http"):
-            url = f"https://video-analysis.darkube.app/frame?path={frame['image_path']}"
+            url = f"{APP_BASE_URL}/frame?path={frame['image_path']}"
 
         frame_urls.append(url)
         revision_input.append({
@@ -234,16 +231,14 @@ async def check_video(video_url: VideoURL):
             "url": url
         })
 
-    # ارسال فریم‌ها به API بررسی
-    revision_api_url = "https://revision.basalam.com/api_v1.0/validation/image/hijab-detector/bulk"
     headers = {
-        "api-token": REVISION_API_TOKEN ,
+        "api-token": REVISION_API_TOKEN,
         "Content-Type": "application/json"
     }
 
     try:
         response = requests.post(
-            revision_api_url,
+            MODERATION_API_URL,
             json={"images": revision_input},
             headers=headers
         )
@@ -256,10 +251,8 @@ async def check_video(video_url: VideoURL):
 
         revision_results = response.json()
 
-        # آیا حتی یک فریم هم ممنوع بوده؟
         is_video_forbidden = any(f.get("is_forbidden", False) for f in revision_results)
 
-        # اضافه کردن آدرس فریم‌ها به خروجی نهایی
         for item in revision_results:
             fid = item.get("file_id")
             if fid is not None and fid < len(frame_urls):
